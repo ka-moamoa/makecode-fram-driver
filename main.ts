@@ -48,13 +48,13 @@ let customMKArg29: number
 namespace fram {
     //% blockId=fram_begin block="fram|begin"
     export function begin() {
-        pins.digitalWritePin(DigitalPin.P9, 1)
-        pins.spiPins(DigitalPin.P15, DigitalPin.P14, DigitalPin.P13)
-        pins.spiFormat(8, 0)
-        pins.spiFrequency(20000000)
-        fram.getDeviceID()
+        //pins.digitalWritePin(DigitalPin.P9, 1)
+        //pins.spiPins(DigitalPin.P15, DigitalPin.P14, DigitalPin.P13)
+        //pins.spiFormat(8, 0)
+        //pins.spiFrequency(20000000)
+        //fram.getDeviceID()
         //fram.writeEnable()
-        
+
 
     }
     //% blockId=fram_init block="fram|init"
@@ -64,12 +64,12 @@ namespace fram {
         generation = fram.read8(0)
         fram.write_number(1000, 0, 0)
         fram.read_number(1000, 0)
-        fram.writeBoolean(1000,false,0)
-        fram.readBoolean(1000,0)
-        fram.writeArray(1000,[],0)
-        fram.readArray(1000,1,0)
-        fram.writeString(1000,"",0)
-        fram.readString(1000,0)
+        fram.writeBoolean(1000, false, 0)
+        fram.readBoolean(1000, 0)
+        fram.writeArray(1000, [], 0)
+        fram.readArray(1000, 1, 0)
+        fram.writeString(1000, "", 0)
+        fram.readString(1000, 0)
         intermittent = true // comment this out to turn off transformations
         //base = true // checkpoint every block
         timer = 100 // checkpoint on timer in ms
@@ -119,137 +119,187 @@ namespace fram {
     //% help=fram/write8 blockGap=8
     //% blockId=fram_write8 block="fram|write8 %addr %val"
     export function write8(addr: number, val: number) {
-        pins.i2cWriteNumber(addr, val, NumberFormat.Int8LE, false)
+        pins.i2cWriteBuffer(0x50, pins.createBufferFromArray([addr >> 8, addr & 0xff, val]), false)
     }
 
     //% blockId=fram_read8 block="fram|read8 %addr"
     export function read8(addr: number) {
-        return pins.i2cReadNumber(addr,NumberFormat.Int8LE)
+        pins.i2cWriteBuffer(0x50, pins.createBufferFromArray([addr >> 8, addr & 0xff]), false)
+        return pins.i2cReadBuffer(0x50, 1, false)[0]
     }
 
     export function clear() {
+
+        //fram.write8(0, 22)
+
+        //pins.i2cWriteBuffer(0x50, pins.createBufferFromArray([20 >> 8, 20 & 0xff]), true)
+        //pins.i2cWriteBuffer(0x50,pins.createBuffer(100),false)
+        //pins.i2cWriteNumber(0x50,0,NumberFormat.Int32LE, true)
         
-        for (let i = 0; i < 8000; i++) {
-            pins.i2cWriteNumber(i, 0, NumberFormat.Int8LE,true)
+        for(let i = 0; i < 32000; i++){
+            fram.write8(i,0)
         }
-        pins.i2cWriteNumber(8000, 0, NumberFormat.Int8LE, false)
     }
 
-    export function writeBoolean(addr:number, val:boolean, addrlength:number){
+    export function writeBoolean(addr: number, val: boolean, addrlength: number) {
+    
         if (generation == 1) {
-            addr+=addrlength
-        } 
-        
-        if(val){
-            pins.i2cWriteNumber(1, 0, NumberFormat.Int8LE)
+            if (val) {
+                fram.write8(addr+addrlength,1)
+            } else {
+                fram.write8(addr+addrlength,0)
+            }
         } else {
-            pins.i2cWriteNumber(0, 0, NumberFormat.Int8LE)
+            if (val) {
+                fram.write8(addr, 1)
+            } else {
+                fram.write8(addr, 0)
+            }
         }
-        
+
+    
+
+
     }
 
-    export function readBoolean(addr:number, addrlength:number){
-        
+    export function readBoolean(addr: number, addrlength: number) {
+
+        let p1 = 0
+
+    
         if (generation != 1) {
-            addr+= addrlength
-        } 
-        
-
-        let p1 = pins.i2cReadNumber(addr, NumberFormat.Int8LE, false)
-        
-        if(p1 == 1){
-            return true
-        } else if(p1 == 0){
-            return false
+            p1 = fram.read8(addr+addrlength)
         } else {
-            basic.showIcon(IconNames.Sad)
-            while(1);
+            p1 = fram.read8(addr)
+        }
+
+    
+
+        if(p1){
+            return true
+        } else {
             return false
         }
+
+        
     }
 
-    export function writeArray(addr:number, val:any[], addrlength:number){
-        if(addrlength <= 0){
+    export function writeArray(addr: number, val: any[], addrlength: number) {
+        if (addrlength <= 0) {
             return
         }
-        if(val.length > 25){
+        if (val.length > 25) {
             basic.showIcon(IconNames.Angry)
-            while(1);
+            while (1);
             return
         }
-        
+
+    
         if (generation == 1) {
-            addr+=addrlength
-        } 
-        
-        
-        
-        pins.i2cWriteNumber(addr, val.length, NumberFormat.Int8LE, false)
-        for(let i = 0; i < val.length; i++){
-            pins.i2cWriteNumber(addr+(i*4), val[i], NumberFormat.Int32LE, false)
+            fram.write8(addr+addrlength,val.length)
+            for(let i = 0; i < val.length; i++){
+                fram.write8(addr+addrlength+i+1,val[i] >> 24)
+                fram.write8(addr + addrlength + i + 1, val[i] >> 16)
+                fram.write8(addr + addrlength + i + 1, val[i] >> 8)
+                fram.write8(addr + addrlength + i + 1, val[i] & 0xff)
+            }
+        } else {
+            fram.write8(addr, val.length)
+            for (let i = 0; i < val.length; i++) {
+                fram.write8(addr + i + 1, val[i] >> 24)
+                fram.write8(addr + i + 1, val[i] >> 16)
+                fram.write8(addr + i + 1, val[i] >> 8)
+                fram.write8(addr + i + 1, val[i] & 0xff)
+            }
         }
+
+    
+
 
     }
 
-    export function readArray(addr:number, arrtype:number, addrlength:number){
+    export function readArray(addr: number, arrtype: number, addrlength: number) {
         if (addrlength <= 0) {
             return []
         }
-        
+
+        let val: number[]
+        let valLen = 0
+    
         if (generation != 1) {
-            addr+=addrlength
-        } 
-        
-
-        let val:number[]
-
-        let val_len = pins.i2cReadNumber(addr, NumberFormat.Int8LE, false)
-        for (let i = 0; i < val_len; i++) {
-            val.push(pins.i2cReadNumber(addr+(i*4), NumberFormat.Int32LE, false))
+            valLen = fram.read8(addr+addrlength)
+            for(let i = 0; i < valLen; i++){
+                let p1 = fram.read8(addr+addrlength+i+1)
+                let p2 = fram.read8(addr + addrlength + i + 2)
+                let p3 = fram.read8(addr + addrlength + i + 3)
+                let p4 = fram.read8(addr + addrlength + i + 4)
+                val.push((p1 << 24) | (p2 << 16) | (p3 << 8) | p4)
+            }
+        } else {
+            valLen = fram.read8(addr)
+            for (let i = 0; i < valLen; i++) {
+                let p1 = fram.read8(addr + i + 1)
+                let p2 = fram.read8(addr + i + 2)
+                let p3 = fram.read8(addr + i + 3)
+                let p4 = fram.read8(addr + i + 4)
+                val.push((p1 << 24) | (p2 << 16) | (p3 << 8) | p4)
+            }
         }
 
-        
 
         return val
     }
 
-    export function writeString(addr:number, str:String, addrlength:number){
-        if(addrlength <= 0){
+    export function writeString(addr: number, str: String, addrlength: number) {
+        if (addrlength <= 0) {
             return
         }
-        if(str.length >= 99){
+        if (str.length >= 99) {
             basic.showIcon(IconNames.Meh)
-            while(1);
+            while (1);
             return
         }
-        
 
         if (generation == 1) {
-            addr+=addrlength
-        } 
-       
-        
-        pins.i2cWriteNumber(addr, str.length, NumberFormat.Int8LE)
-        for(let i = 0; i < str.length; i++){ 
-            pins.i2cWriteNumber(addr + i, str.charCodeAt(i), NumberFormat.Int8LE)
+            fram.write8(addr+addrlength,str.length)
+            for(let i = 0; i < str.length; i++){
+                fram.write8(addr+addrlength+i+1,str.charCodeAt(i))
+            }
+        } else {
+            fram.write8(addr, str.length)
+            for (let i = 0; i < str.length; i++) {
+                fram.write8(addr + i + 1, str.charCodeAt(i))
+            }
         }
-        
+
+    
+
     }
 
-    export function readString(addr:number, addrlength:number){
-        if(addrlength <= 0){
+    export function readString(addr: number, addrlength: number) {
+        if (addrlength <= 0) {
             return
         }
-        
-        if (generation != 1) {
-            addr+=addrlength
-        } 
-        
+
         let read_str = ""
-        let str_len = pins.i2cReadNumber(addr, NumberFormat.Int8LE, false)
-        for(let i = 0; i < str_len; i++){
-            read_str = read_str.concat(String.fromCharCode(pins.i2cReadNumber(0, NumberFormat.Int8LE, false)))
+        let str_len = 0
+
+        if (generation != 1) {
+            str_len = fram.read8(addr+addrlength)
+            for (let i = 0; i < str_len; i++) {
+                read_str = read_str.concat(String.fromCharCode(fram.read8(addr+addrlength+1)))
+            }
+        } else {
+            str_len = fram.read8(addr)
+            for (let i = 0; i < str_len; i++) {
+                read_str = read_str.concat(String.fromCharCode(fram.read8(addr + 1)))
+            }
         }
+
+        
+
+
+        
 
     }
 
@@ -258,30 +308,56 @@ namespace fram {
     //% blockId=fram_write_number block="fram|write number %addr %val"
     export function write_number(addr: number, val: number, addrlength: number) {
         //serial.writeLine("Generation = "+generation)
+    
         if (generation == 1) {
-            addr+=addrlength
-        } 
-        
-        pins.i2cWriteNumber(addr, val, NumberFormat.Int32LE)
+            fram.write8(addr+addrlength,val >> 24)
+            fram.write8(addr + addrlength + 1, val >> 16)
+            fram.write8(addr + addrlength + 2, val >> 8)
+            fram.write8(addr + addrlength + 3, val & 0xff)
+        } else {
+            fram.write8(addr, val >> 24)
+            fram.write8(addr + 1, val >> 16)
+            fram.write8(addr + 2, val >> 8)
+            fram.write8(addr + 3, val & 0xff)
+        }
+
+    
     }
 
     //% blockId=fram_read_number block="fram|read number %addr"
     export function read_number(addr: number, addrlength: number) {
         //serial.writeLine("Generation: "+generation)
+
+        let num = 0
+        let p1,p2,p3,p4
         
         if (generation != 1) {
-            addr+=addrlength
-        } 
-        
+            p1 = fram.read8(addr+addrlength)
+            p2 = fram.read8(addr+addrlength + 1)
+            p3 = fram.read8(addr+addrlength + 2)
+            p4 = fram.read8(addr+addrlength + 3)
 
-        
-        return pins.i2cReadNumber(addr, NumberFormat.Int32LE)
+            num = (p1 << 24) | (p2 << 16) | (p3 << 8) | p4
+        } else {
+            p1 = fram.read8(addr)
+            p2 = fram.read8(addr + 1)
+            p3 = fram.read8(addr + 2)
+            p4 = fram.read8(addr + 3)
+
+            num = (p1 << 24) | (p2 << 16) | (p3 << 8) | p4
+        }
+
+
+        return num
+
+
     }
 
 
 
     //% blockId=fram_getdeviceid block="fram|get device ID"
     export function getDeviceID() {
+        /*
         let whoami = 0
         let wh0 = 0
         let wh1 = 0
@@ -300,12 +376,13 @@ namespace fram {
         } else {
             //serial.writeString("ERR: FRAM not Connected\n")
         }
+        */
     }
     //% blockId=fram_writeenable block="fram|write enable"
     export function writeEnable() {
-        pins.digitalWritePin(DigitalPin.P9, 0)
-        let wh3 = pins.spiWrite(OPCODES.OPCODE_WREN)
-        pins.digitalWritePin(DigitalPin.P9, 1)
+        //pins.digitalWritePin(DigitalPin.P9, 0)
+        //let wh3 = pins.spiWrite(OPCODES.OPCODE_WREN)
+        //pins.digitalWritePin(DigitalPin.P9, 1)
         //serial.writeLine("FRAM Writes Enabled")
     }
 
