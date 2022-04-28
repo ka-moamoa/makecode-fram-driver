@@ -5,7 +5,7 @@ enum OPCODES {
     OPCODE_RDID = 159,
     OPCODE_WREN = 6
 }
-let intermittent
+//let intermittent
 //let base
 let timer = 100
 //let weight = 100
@@ -70,7 +70,7 @@ namespace fram {
         fram.readArray(1000, 1, 0)
         fram.writeString(1000, "", 0)
         fram.readString(1000, 0)
-        intermittent = true // comment this out to turn off transformations
+        //intermittent = true // comment this out to turn off transformations
         //base = true // checkpoint every block
         timer = 100 // checkpoint on timer in ms
         //weight = 100 // checkpoint based on weight of loop
@@ -135,19 +135,19 @@ namespace fram {
         //pins.i2cWriteBuffer(0x50, pins.createBufferFromArray([20 >> 8, 20 & 0xff]), true)
         //pins.i2cWriteBuffer(0x50,pins.createBuffer(100),false)
         //pins.i2cWriteNumber(0x50,0,NumberFormat.Int32LE, true)
-        
-        for(let i = 0; i < 32000; i++){
-            fram.write8(i,0)
+
+        for (let i = 0; i < 32000; i++) {
+            fram.write8(i, 0)
         }
     }
 
     export function writeBoolean(addr: number, val: boolean, addrlength: number) {
-    
+
         if (generation == 1) {
             if (val) {
-                fram.write8(addr+addrlength,1)
+                fram.write8(addr + addrlength, 1)
             } else {
-                fram.write8(addr+addrlength,0)
+                fram.write8(addr + addrlength, 0)
             }
         } else {
             if (val) {
@@ -157,7 +157,7 @@ namespace fram {
             }
         }
 
-    
+
 
 
     }
@@ -166,22 +166,22 @@ namespace fram {
 
         let p1 = 0
 
-    
+
         if (generation != 1) {
-            p1 = fram.read8(addr+addrlength)
+            p1 = fram.read8(addr + addrlength)
         } else {
             p1 = fram.read8(addr)
         }
 
-    
 
-        if(p1){
+
+        if (p1) {
             return true
         } else {
             return false
         }
 
-        
+
     }
 
     export function writeArray(addr: number, val: any[], addrlength: number) {
@@ -194,26 +194,27 @@ namespace fram {
             return
         }
 
-    
+        
+
         if (generation == 1) {
-            fram.write8(addr+addrlength,val.length)
-            for(let i = 0; i < val.length; i++){
-                fram.write8(addr+addrlength+i+1,val[i] >> 24)
-                fram.write8(addr + addrlength + i + 1, val[i] >> 16)
-                fram.write8(addr + addrlength + i + 1, val[i] >> 8)
-                fram.write8(addr + addrlength + i + 1, val[i] & 0xff)
+            fram.write8(addr + addrlength, val.length)
+            for (let i = 0; i < val.length; i++) {
+                fram.write8(addr + addrlength + (i*4) + 1, val[i] >> 24)
+                fram.write8(addr + addrlength + (i*4) + 2, val[i] >> 16)
+                fram.write8(addr + addrlength + (i*4) + 3, val[i] >> 8)
+                fram.write8(addr + addrlength + (i*4) + 4, val[i] & 0xff)
             }
         } else {
             fram.write8(addr, val.length)
             for (let i = 0; i < val.length; i++) {
-                fram.write8(addr + i + 1, val[i] >> 24)
-                fram.write8(addr + i + 1, val[i] >> 16)
-                fram.write8(addr + i + 1, val[i] >> 8)
-                fram.write8(addr + i + 1, val[i] & 0xff)
+                fram.write8(addr + (i*4) + 1, val[i] >> 24)
+                fram.write8(addr + (i*4) + 2, val[i] >> 16)
+                fram.write8(addr + (i*4) + 3, val[i] >> 8)
+                fram.write8(addr + (i*4) + 4, val[i] & 0xff)
             }
         }
 
-    
+
 
 
     }
@@ -223,27 +224,39 @@ namespace fram {
             return []
         }
 
-        let val: number[]
+        let val = []
         let valLen = 0
-    
+
         if (generation != 1) {
-            valLen = fram.read8(addr+addrlength)
-            for(let i = 0; i < valLen; i++){
-                let p1 = fram.read8(addr+addrlength+i+1)
-                let p2 = fram.read8(addr + addrlength + i + 2)
-                let p3 = fram.read8(addr + addrlength + i + 3)
-                let p4 = fram.read8(addr + addrlength + i + 4)
-                val.push((p1 << 24) | (p2 << 16) | (p3 << 8) | p4)
-            }
-        } else {
-            valLen = fram.read8(addr)
+            valLen = fram.read8(addr + addrlength) & 0xffffffff
+           
             for (let i = 0; i < valLen; i++) {
-                let p1 = fram.read8(addr + i + 1)
-                let p2 = fram.read8(addr + i + 2)
-                let p3 = fram.read8(addr + i + 3)
-                let p4 = fram.read8(addr + i + 4)
-                val.push((p1 << 24) | (p2 << 16) | (p3 << 8) | p4)
+             
+                let p1 = fram.read8(addr + addrlength + (i*4) + 1)
+              
+                let p2 = fram.read8(addr + addrlength + (i*4) + 2)
+              
+                let p3 = fram.read8(addr + addrlength + (i*4) + 3)
+                
+                let p4 = fram.read8(addr + addrlength + (i*4) + 4)
+                
+                let newnum = (p1 << 24) | (p2 << 16) | (p3 << 8) | p4
+                val.push(newnum)
+               
             }
+           
+        } else {
+            valLen = fram.read8(addr) & 0xffffffff
+            for (let i = 0; i < valLen; i++) {
+               
+                let p1 = fram.read8(addr + (i*4) + 1)
+                let p2 = fram.read8(addr + (i*4) + 2)
+                let p3 = fram.read8(addr + (i*4) + 3)
+                let p4 = fram.read8(addr + (i*4) + 4)
+                let newnum = (p1 << 24) | (p2 << 16) | (p3 << 8) | p4
+                val.push(newnum)
+            }
+            
         }
 
 
@@ -261,9 +274,9 @@ namespace fram {
         }
 
         if (generation == 1) {
-            fram.write8(addr+addrlength,str.length)
-            for(let i = 0; i < str.length; i++){
-                fram.write8(addr+addrlength+i+1,str.charCodeAt(i))
+            fram.write8(addr + addrlength, str.length)
+            for (let i = 0; i < str.length; i++) {
+                fram.write8(addr + addrlength + i + 1, str.charCodeAt(i))
             }
         } else {
             fram.write8(addr, str.length)
@@ -272,34 +285,34 @@ namespace fram {
             }
         }
 
-    
+
 
     }
 
     export function readString(addr: number, addrlength: number) {
         if (addrlength <= 0) {
-            return
+            return ""
         }
 
         let read_str = ""
         let str_len = 0
 
         if (generation != 1) {
-            str_len = fram.read8(addr+addrlength)
+            str_len = fram.read8(addr + addrlength)
             for (let i = 0; i < str_len; i++) {
-                read_str = read_str.concat(String.fromCharCode(fram.read8(addr+addrlength+1)))
+                read_str = read_str.concat(String.fromCharCode(fram.read8(addr + addrlength + i + 1)))
             }
         } else {
             str_len = fram.read8(addr)
             for (let i = 0; i < str_len; i++) {
-                read_str = read_str.concat(String.fromCharCode(fram.read8(addr + 1)))
+                read_str = read_str.concat(String.fromCharCode(fram.read8(addr + i + 1)))
             }
         }
 
-        
 
 
-        
+        return read_str
+
 
     }
 
@@ -308,9 +321,9 @@ namespace fram {
     //% blockId=fram_write_number block="fram|write number %addr %val"
     export function write_number(addr: number, val: number, addrlength: number) {
         //serial.writeLine("Generation = "+generation)
-    
+
         if (generation == 1) {
-            fram.write8(addr+addrlength,val >> 24)
+            fram.write8(addr + addrlength, val >> 24)
             fram.write8(addr + addrlength + 1, val >> 16)
             fram.write8(addr + addrlength + 2, val >> 8)
             fram.write8(addr + addrlength + 3, val & 0xff)
@@ -321,7 +334,7 @@ namespace fram {
             fram.write8(addr + 3, val & 0xff)
         }
 
-    
+
     }
 
     //% blockId=fram_read_number block="fram|read number %addr"
@@ -329,13 +342,13 @@ namespace fram {
         //serial.writeLine("Generation: "+generation)
 
         let num = 0
-        let p1,p2,p3,p4
-        
+        let p1, p2, p3, p4
+
         if (generation != 1) {
-            p1 = fram.read8(addr+addrlength)
-            p2 = fram.read8(addr+addrlength + 1)
-            p3 = fram.read8(addr+addrlength + 2)
-            p4 = fram.read8(addr+addrlength + 3)
+            p1 = fram.read8(addr + addrlength)
+            p2 = fram.read8(addr + addrlength + 1)
+            p3 = fram.read8(addr + addrlength + 2)
+            p4 = fram.read8(addr + addrlength + 3)
 
             num = (p1 << 24) | (p2 << 16) | (p3 << 8) | p4
         } else {
