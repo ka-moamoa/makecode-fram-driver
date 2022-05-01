@@ -48,18 +48,17 @@ let customMKArg29: number
 namespace fram {
     //% blockId=fram_begin block="fram|begin"
     export function begin() {
-        //pins.digitalWritePin(DigitalPin.P9, 1)
-        //pins.spiPins(DigitalPin.P15, DigitalPin.P14, DigitalPin.P13)
-        //pins.spiFormat(8, 0)
-        //pins.spiFrequency(20000000)
-        //fram.getDeviceID()
+        pins.digitalWritePin(DigitalPin.P9, 1)
+        pins.spiPins(DigitalPin.P15, DigitalPin.P14, DigitalPin.P13)
+        pins.spiFormat(8, 0)
+        pins.spiFrequency(20000000)
+        fram.getDeviceID()
         //fram.writeEnable()
-
 
     }
     //% blockId=fram_init block="fram|init"
     export function init() {
-        //fram.begin()
+        fram.begin()
         fram.write8(1000, 0)
         generation = fram.read8(0)
         fram.write_number(1000, 0, 0)
@@ -119,69 +118,102 @@ namespace fram {
     //% help=fram/write8 blockGap=8
     //% blockId=fram_write8 block="fram|write8 %addr %val"
     export function write8(addr: number, val: number) {
-        pins.i2cWriteBuffer(0x50, pins.createBufferFromArray([addr >> 8, addr & 0xff, val]), false)
+        pins.digitalWritePin(DigitalPin.P9, 0)
+        pins.spiWrite(OPCODES.OPCODE_WRITE)
+        pins.spiWrite(addr >> 16)
+        pins.spiWrite(addr >> 8)
+        pins.spiWrite(addr & 0xff)
+        pins.spiWrite(val)
+        pins.digitalWritePin(DigitalPin.P9, 1)
     }
 
     //% blockId=fram_read8 block="fram|read8 %addr"
     export function read8(addr: number) {
-        pins.i2cWriteBuffer(0x50, pins.createBufferFromArray([addr >> 8, addr & 0xff]), false)
-        return pins.i2cReadBuffer(0x50, 1, false)[0]
+        pins.digitalWritePin(DigitalPin.P9, 0)
+        pins.spiWrite(OPCODES.OPCODE_READ)
+        pins.spiWrite(addr >> 16)
+        pins.spiWrite(addr >> 8)
+        pins.spiWrite(addr & 0xff)
+        let wh3 = pins.spiWrite(255)
+        pins.digitalWritePin(DigitalPin.P9, 1)
+        return wh3
     }
 
     export function clear() {
-
-        //fram.write8(0, 22)
-
-        //pins.i2cWriteBuffer(0x50, pins.createBufferFromArray([20 >> 8, 20 & 0xff]), true)
-        //pins.i2cWriteBuffer(0x50,pins.createBuffer(100),false)
-        //pins.i2cWriteNumber(0x50,0,NumberFormat.Int32LE, true)
-
+        fram.writeEnable()
+        pins.digitalWritePin(DigitalPin.P9, 0)
+        pins.spiWrite(OPCODES.OPCODE_WRITE)
+        pins.spiWrite(0 >> 16)
+        pins.spiWrite(0 >> 8)
+        pins.spiWrite(0 & 0xff)
         for (let i = 0; i < 32000; i++) {
-            fram.write8(i, 0)
+            pins.spiWrite(0)
         }
+        pins.digitalWritePin(DigitalPin.P9, 1)
     }
 
     export function writeBoolean(addr: number, val: boolean, addrlength: number) {
+        if (addr == 1) {
+            fram.writeEnable()
+            pins.digitalWritePin(DigitalPin.P9, 0)
+            pins.spiWrite(OPCODES.OPCODE_WRITE)
+            gencopy = generation
 
-        if (generation == 1) {
-            if (val) {
-                fram.write8(addr + addrlength, 1)
+            if (generation == 1) {
+                //serial.writeLine("Writing to far address " + (addr + addrlength))
+                pins.spiWrite((addr+addrlength) >> 16)
+                pins.spiWrite((addr + addrlength) >> 8)
+                pins.spiWrite((addr + addrlength) & 0xff)
             } else {
-                fram.write8(addr + addrlength, 0)
-            }
-        } else {
-            if (val) {
-                fram.write8(addr, 1)
-            } else {
-                fram.write8(addr, 0)
+                //serial.writeLine("Writing to near address" + addr)
+                pins.spiWrite(addr >> 16)
+                pins.spiWrite(addr >> 8)
+                pins.spiWrite(addr & 0xff)
             }
         }
+        if (val) {
+            pins.spiWrite(1)
+            //serial.writeLine("wrote true")
+        } else {
+            pins.spiWrite(0)
+            //serial.writeLine("wrote false")
+        }
 
-
-
-
+        if (addr == (addrlength)) {
+            pins.digitalWritePin(DigitalPin.P9, 1)
+        }
     }
 
     export function readBoolean(addr: number, addrlength: number) {
-
-        let p1 = 0
-
-
-        if (generation != 1) {
-            p1 = fram.read8(addr + addrlength)
-        } else {
-            p1 = fram.read8(addr)
+        if (addr == 1) {
+            pins.digitalWritePin(DigitalPin.P9, 0)
+            pins.spiWrite(OPCODES.OPCODE_READ)
+            if (generation == 1) {
+                //serial.writeLine("reading to near address" + addr)
+                pins.spiWrite(addr >> 16)
+                pins.spiWrite(addr >> 8)
+                pins.spiWrite(addr & 0xff)
+            } else {
+                //serial.writeLine("Reading to far address " + (addr + addrlength))
+                pins.spiWrite((addr + addrlength) >> 16)
+                pins.spiWrite((addr + addrlength) >> 8)
+                pins.spiWrite((addr + addrlength) & 0xff)
+            }
         }
 
-
-
-        if (p1) {
+        let p1 = pins.spiWrite(255)
+        if (addr == (addrlength)) {
+            pins.digitalWritePin(DigitalPin.P9, 1)
+        }
+        if (p1 == 1) {
             return true
+        } else if (p1 == 0) {
+            return false
         } else {
+            basic.showIcon(IconNames.Sad)
+            while (1);
             return false
         }
-
-
     }
 
     export function writeArray(addr: number, val: any[], addrlength: number) {
@@ -193,30 +225,36 @@ namespace fram {
             while (1);
             return
         }
+        if (addr == 1) {
+            fram.writeEnable()
+            pins.digitalWritePin(DigitalPin.P9, 0)
+            pins.spiWrite(OPCODES.OPCODE_WRITE)
+            gencopy = generation
 
-        
-
-        if (generation == 1) {
-            fram.write8(addr + addrlength, val.length)
-            for (let i = 0; i < val.length; i++) {
-                fram.write8(addr + addrlength + (i*4) + 1, val[i] >> 24)
-                fram.write8(addr + addrlength + (i*4) + 2, val[i] >> 16)
-                fram.write8(addr + addrlength + (i*4) + 3, val[i] >> 8)
-                fram.write8(addr + addrlength + (i*4) + 4, val[i] & 0xff)
-            }
-        } else {
-            fram.write8(addr, val.length)
-            for (let i = 0; i < val.length; i++) {
-                fram.write8(addr + (i*4) + 1, val[i] >> 24)
-                fram.write8(addr + (i*4) + 2, val[i] >> 16)
-                fram.write8(addr + (i*4) + 3, val[i] >> 8)
-                fram.write8(addr + (i*4) + 4, val[i] & 0xff)
+            if (generation == 1) {
+                //serial.writeLine("reading to far address " + (addr + addrlength))
+                pins.spiWrite((addr + addrlength) >> 16)
+                pins.spiWrite((addr + addrlength) >> 8)
+                pins.spiWrite((addr + addrlength) & 0xff)
+            } else {
+                //serial.writeLine("reading to near address" + addr)
+                pins.spiWrite(addr >> 16)
+                pins.spiWrite(addr >> 8)
+                pins.spiWrite(addr & 0xff)
             }
         }
 
+        pins.spiWrite(val.length)
+        for (let i = 0; i < val.length; i++) {
+            pins.spiWrite(val[i] >> 24)
+            pins.spiWrite((val[i] >> 16) & 0xff)
+            pins.spiWrite((val[i] >> 8) & 0xff)
+            pins.spiWrite(val[i] & 0xff)
+        }
 
-
-
+        if (addr == (addrlength - 99)) {
+            pins.digitalWritePin(DigitalPin.P9, 1)
+        }
     }
 
     export function readArray(addr: number, arrtype: number, addrlength: number) {
@@ -224,41 +262,39 @@ namespace fram {
             return []
         }
 
-        let val = []
-        let valLen = 0
+        if (addr == 1) {
+            fram.writeEnable()
+            pins.digitalWritePin(DigitalPin.P9, 0)
+            pins.spiWrite(OPCODES.OPCODE_READ)
+            gencopy = generation
 
-        if (generation != 1) {
-            valLen = fram.read8(addr + addrlength) & 0xffffffff
-           
-            for (let i = 0; i < valLen; i++) {
-             
-                let p1 = fram.read8(addr + addrlength + (i*4) + 1)
-              
-                let p2 = fram.read8(addr + addrlength + (i*4) + 2)
-              
-                let p3 = fram.read8(addr + addrlength + (i*4) + 3)
-                
-                let p4 = fram.read8(addr + addrlength + (i*4) + 4)
-                
-                let newnum = (p1 << 24) | (p2 << 16) | (p3 << 8) | p4
-                val.push(newnum)
-               
+            if (generation == 1) {
+                //serial.writeLine("reading to far address " + (addr + addrlength))
+                pins.spiWrite((addr + addrlength) >> 16)
+                pins.spiWrite((addr + addrlength) >> 8)
+                pins.spiWrite((addr + addrlength) & 0xff)
+            } else {
+                //serial.writeLine("reading to near address" + addr)
+                pins.spiWrite(addr >> 16)
+                pins.spiWrite(addr >> 8)
+                pins.spiWrite(addr & 0xff)
             }
-           
-        } else {
-            valLen = fram.read8(addr) & 0xffffffff
-            for (let i = 0; i < valLen; i++) {
-               
-                let p1 = fram.read8(addr + (i*4) + 1)
-                let p2 = fram.read8(addr + (i*4) + 2)
-                let p3 = fram.read8(addr + (i*4) + 3)
-                let p4 = fram.read8(addr + (i*4) + 4)
-                let newnum = (p1 << 24) | (p2 << 16) | (p3 << 8) | p4
-                val.push(newnum)
-            }
-            
         }
 
+        let val = []
+
+        let val_len = pins.spiWrite(255)
+        for (let i = 0; i < val_len; i++) {
+            let p1 = pins.spiWrite(255)
+            let p2 = pins.spiWrite(255)
+            let p3 = pins.spiWrite(255)
+            let p4 = pins.spiWrite(255)
+            val.push((p1 << 24) | (p2 << 16) | (p3 << 8) | p4)
+        }
+
+        if (addr == (addrlength - 99)) {
+            pins.digitalWritePin(DigitalPin.P9, 1)
+        }
 
         return val
     }
@@ -272,47 +308,70 @@ namespace fram {
             while (1);
             return
         }
+        if (addr == 1) {
+            fram.writeEnable()
+            pins.digitalWritePin(DigitalPin.P9, 0)
+            pins.spiWrite(OPCODES.OPCODE_WRITE)
+            gencopy = generation
 
-        if (generation == 1) {
-            fram.write8(addr + addrlength, str.length)
-            for (let i = 0; i < str.length; i++) {
-                fram.write8(addr + addrlength + i + 1, str.charCodeAt(i))
-            }
-        } else {
-            fram.write8(addr, str.length)
-            for (let i = 0; i < str.length; i++) {
-                fram.write8(addr + i + 1, str.charCodeAt(i))
+            if (generation == 1) {
+                //serial.writeLine("Writing to far address " + (addr + addrlength))
+                pins.spiWrite((addr + addrlength) >> 16)
+                pins.spiWrite((addr + addrlength) >> 8)
+                pins.spiWrite((addr + addrlength) & 0xff)
+            } else {
+                //serial.writeLine("Writing to near address" + addr)
+                pins.spiWrite(addr >> 16)
+                pins.spiWrite(addr >> 8)
+                pins.spiWrite(addr & 0xff)
             }
         }
-
-
-
+        pins.spiWrite(str.length)
+        for (let i = 0; i < str.length; i++) {
+            //serial.writeLine("str at " + i + " is " + str.charCodeAt(i) + " is the letter " +str.charAt(i))
+            pins.spiWrite(str.charCodeAt(i))
+        }
+        if (addr == (addrlength - 99)) {
+            pins.digitalWritePin(DigitalPin.P9, 1)
+        }
     }
 
     export function readString(addr: number, addrlength: number) {
         if (addrlength <= 0) {
             return ""
         }
+        if (addr == 1) {
+            fram.writeEnable()
+            pins.digitalWritePin(DigitalPin.P9, 0)
+            pins.spiWrite(OPCODES.OPCODE_READ)
+            gencopy = generation
 
+            if (generation == 1) {
+                //serial.writeLine("Writing to far address " + (addr + addrlength))
+                pins.spiWrite((addr + addrlength) >> 16)
+                pins.spiWrite((addr + addrlength) >> 8)
+                pins.spiWrite((addr + addrlength) & 0xff)
+            } else {
+                //serial.writeLine("Writing to near address" + addr)
+                pins.spiWrite(addr >> 16)
+                pins.spiWrite(addr >> 8)
+                pins.spiWrite(addr & 0xff)
+            }
+        }
         let read_str = ""
-        let str_len = 0
-
-        if (generation != 1) {
-            str_len = fram.read8(addr + addrlength)
-            for (let i = 0; i < str_len; i++) {
-                read_str = read_str.concat(String.fromCharCode(fram.read8(addr + addrlength + i + 1)))
-            }
-        } else {
-            str_len = fram.read8(addr)
-            for (let i = 0; i < str_len; i++) {
-                read_str = read_str.concat(String.fromCharCode(fram.read8(addr + i + 1)))
-            }
+        let str_len = pins.spiWrite(255)
+        //serial.writeLine("strlen = " + str_len)
+        for (let i = 0; i < str_len; i++) {
+            read_str = read_str.concat(String.fromCharCode(pins.spiWrite(255)))
+            //serial.writeLine(read_str)
         }
 
 
+        if (addr == (addrlength - 99)) {
+            pins.digitalWritePin(DigitalPin.P9, 1)
+        }
 
         return read_str
-
 
     }
 
@@ -321,17 +380,30 @@ namespace fram {
     //% blockId=fram_write_number block="fram|write number %addr %val"
     export function write_number(addr: number, val: number, addrlength: number) {
         //serial.writeLine("Generation = "+generation)
+        if (addr == 1) {
+            fram.writeEnable()
+            pins.digitalWritePin(DigitalPin.P9, 0)
+            pins.spiWrite(OPCODES.OPCODE_WRITE)
+            gencopy = generation
 
-        if (generation == 1) {
-            fram.write8(addr + addrlength, val >> 24)
-            fram.write8(addr + addrlength + 1, val >> 16)
-            fram.write8(addr + addrlength + 2, val >> 8)
-            fram.write8(addr + addrlength + 3, val & 0xff)
-        } else {
-            fram.write8(addr, val >> 24)
-            fram.write8(addr + 1, val >> 16)
-            fram.write8(addr + 2, val >> 8)
-            fram.write8(addr + 3, val & 0xff)
+            if (generation == 1) {
+                //serial.writeLine("Writing to far address " + (addr + addrlength))
+                pins.spiWrite((addr + addrlength) >> 16)
+                pins.spiWrite((addr + addrlength) >> 8)
+                pins.spiWrite((addr + addrlength) & 0xff)
+            } else {
+                //serial.writeLine("Writing to near address" + addr)
+                pins.spiWrite(addr >> 16)
+                pins.spiWrite(addr >> 8)
+                pins.spiWrite(addr & 0xff)
+            }
+        }
+        pins.spiWrite(val >> 24)
+        pins.spiWrite((val >> 16) & 0xff)
+        pins.spiWrite((val >> 8) & 0xff)
+        pins.spiWrite(val & 0xff)
+        if (addr == (addrlength - 3)) {
+            pins.digitalWritePin(DigitalPin.P9, 1)
         }
 
 
@@ -340,37 +412,34 @@ namespace fram {
     //% blockId=fram_read_number block="fram|read number %addr"
     export function read_number(addr: number, addrlength: number) {
         //serial.writeLine("Generation: "+generation)
-
-        let num = 0
-        let p1, p2, p3, p4
-
-        if (generation != 1) {
-            p1 = fram.read8(addr + addrlength)
-            p2 = fram.read8(addr + addrlength + 1)
-            p3 = fram.read8(addr + addrlength + 2)
-            p4 = fram.read8(addr + addrlength + 3)
-
-            num = (p1 << 24) | (p2 << 16) | (p3 << 8) | p4
-        } else {
-            p1 = fram.read8(addr)
-            p2 = fram.read8(addr + 1)
-            p3 = fram.read8(addr + 2)
-            p4 = fram.read8(addr + 3)
-
-            num = (p1 << 24) | (p2 << 16) | (p3 << 8) | p4
+        if (addr == 1) {
+            pins.digitalWritePin(DigitalPin.P9, 0)
+            pins.spiWrite(OPCODES.OPCODE_READ)
+            if (generation == 1) {
+                pins.spiWrite(addr >> 16)
+                pins.spiWrite(addr >> 8)
+                pins.spiWrite(addr & 0xff)
+            } else {
+                pins.spiWrite((addr + addrlength) >> 16)
+                pins.spiWrite((addr + addrlength) >> 8)
+                pins.spiWrite((addr + addrlength) & 0xff)
+            }
         }
 
-
-        return num
-
-
+        let p1 = pins.spiWrite(255)
+        let p2 = pins.spiWrite(255)
+        let p3 = pins.spiWrite(255)
+        let p4 = pins.spiWrite(255)
+        if (addr == (addrlength - 3)) {
+            pins.digitalWritePin(DigitalPin.P9, 1)
+        }
+        return (p1 << 24) | (p2 << 16) | (p3 << 8) | p4
     }
 
 
 
     //% blockId=fram_getdeviceid block="fram|get device ID"
     export function getDeviceID() {
-        /*
         let whoami = 0
         let wh0 = 0
         let wh1 = 0
@@ -389,13 +458,12 @@ namespace fram {
         } else {
             //serial.writeString("ERR: FRAM not Connected\n")
         }
-        */
     }
     //% blockId=fram_writeenable block="fram|write enable"
     export function writeEnable() {
-        //pins.digitalWritePin(DigitalPin.P9, 0)
-        //let wh3 = pins.spiWrite(OPCODES.OPCODE_WREN)
-        //pins.digitalWritePin(DigitalPin.P9, 1)
+        pins.digitalWritePin(DigitalPin.P9, 0)
+        let wh3 = pins.spiWrite(OPCODES.OPCODE_WREN)
+        pins.digitalWritePin(DigitalPin.P9, 1)
         //serial.writeLine("FRAM Writes Enabled")
     }
 
